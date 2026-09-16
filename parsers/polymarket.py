@@ -199,3 +199,4 @@ class PolymarketParser(BaseParser):
             if close_session and self._session:
                 await self._session.close()
                 self._session = None
+

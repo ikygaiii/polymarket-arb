@@ -232,3 +232,4 @@ class ArbitrageCalculator:
                         ))
 
         return opportunities
+

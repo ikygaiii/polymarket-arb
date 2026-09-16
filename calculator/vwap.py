@@ -44,3 +44,4 @@ def calculate_buy_vwap(asks: List[OrderbookLevel], target_stake_usd: float) -> O
 
     vwap_price = target_stake_usd / total_shares
     return vwap_price
+

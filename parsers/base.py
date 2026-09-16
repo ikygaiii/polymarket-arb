@@ -14,3 +14,4 @@ class BaseParser(ABC):
     async def fetch_events(self) -> List[StandardizedEvent]:
         """Fetch active prematch events in standardized format"""
         pass
+

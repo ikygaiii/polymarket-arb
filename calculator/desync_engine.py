@@ -333,3 +333,4 @@ class DesyncDetector:
                         ))
 
         return opportunities
+

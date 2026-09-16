@@ -61,3 +61,4 @@ def normalize_string(text: str) -> str:
     
     # Apply alias mapping if exact match
     return TEAM_ALIASES.get(text, text)
+

@@ -277,3 +277,4 @@ class PolymarketWSParser(BaseParser):
                 await self._ws_task
             except asyncio.CancelledError:
                 pass
+

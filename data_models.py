@@ -147,3 +147,4 @@ class SourceHealth(BaseModel):
     last_updated: float
     is_healthy: bool
     message: str = ""
+

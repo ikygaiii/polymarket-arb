@@ -24,3 +24,4 @@ class BaseBookmakerParser(ABC):
     def register_update_callback(self, callback: Callable[[StandardizedEvent], Awaitable[None]]):
         """Registers async callback to be called on live odds updates."""
         pass
+

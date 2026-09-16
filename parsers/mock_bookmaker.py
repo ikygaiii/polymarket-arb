@@ -126,3 +126,4 @@ class MockBookmakerParser(BaseBookmakerParser):
                 await self._loop_task
             except asyncio.CancelledError:
                 pass
+

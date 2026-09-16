@@ -147,3 +147,4 @@ class OddsApiParser(BaseBookmakerParser):
                 await self._poll_task
             except asyncio.CancelledError:
                 pass
+

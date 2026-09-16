@@ -41,3 +41,4 @@ def calculate_max_executable_liquidity(
 
     effective_vwap = (cum_usd / cum_shares) if cum_shares > 0 else top_price
     return round(cum_usd, 2), round(effective_vwap, 4)
+

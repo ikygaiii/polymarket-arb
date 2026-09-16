@@ -100,3 +100,75 @@ sqlite3.IntegrityError: UNIQUE constraint failed: executed_trades.trade_id
 2026-09-16 16:41:45,841 [INFO] aiogram.event: Update id=930479073 is not handled. Duration 0 ms by bot id=8947405682
 2026-09-16 16:42:11,261 [INFO] main: Refreshed event matcher: 0 active matched pairs
 2026-09-16 16:43:11,265 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:44:11,267 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:45:11,268 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:46:11,271 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:47:11,273 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:48:11,275 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:49:11,277 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:50:11,280 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:51:11,283 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:52:11,285 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:53:11,286 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:54:11,287 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:55:11,289 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:56:11,292 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:57:11,293 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:58:11,295 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 16:59:11,297 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:00:11,299 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:01:11,300 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:02:11,301 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:03:11,304 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:04:11,306 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:05:11,308 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:06:11,310 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:07:11,311 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:08:11,312 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:09:11,313 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:10:11,314 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:11:11,315 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:12:11,316 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:13:11,317 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:14:11,319 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:15:11,321 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:16:11,323 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:17:11,324 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:18:11,327 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:19:11,330 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:20:11,331 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:21:11,332 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:22:11,335 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:23:11,338 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:24:11,341 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:24:36,975 [INFO] aiogram.event: Update id=930479074 is handled. Duration 450 ms by bot id=8947405682
+2026-09-16 17:24:41,692 [INFO] aiogram.event: Update id=930479075 is handled. Duration 140 ms by bot id=8947405682
+2026-09-16 17:24:44,844 [INFO] aiogram.event: Update id=930479076 is not handled. Duration 0 ms by bot id=8947405682
+2026-09-16 17:24:46,802 [INFO] aiogram.event: Update id=930479077 is not handled. Duration 0 ms by bot id=8947405682
+2026-09-16 17:25:11,343 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:26:11,346 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:27:19,609 [INFO] main: Initializing Polymarket Probability Desync System...
+2026-09-16 17:27:19,611 [INFO] bot.telegram_bot: Starting Telegram Bot polling router...
+2026-09-16 17:27:19,612 [INFO] aiogram.dispatcher: Start polling
+2026-09-16 17:27:20,118 [INFO] aiogram.dispatcher: Run polling for bot @PolyCorm_bot id=8947405682 - 'Поликорм'
+2026-09-16 17:27:21,394 [INFO] main: System fully operational and actively scanning for probability desyncs!
+2026-09-16 17:27:21,395 [INFO] parsers.polymarket_ws: Connecting to Polymarket CLOB WS at wss://ws-subscriptions-clob.polymarket.com/ws/market...
+2026-09-16 17:27:21,405 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:27:22,052 [INFO] parsers.polymarket_ws: Polymarket WS connected successfully!
+2026-09-16 17:27:22,052 [INFO] parsers.polymarket_ws: Subscribed to 2 Polymarket assets
+2026-09-16 17:27:35,451 [INFO] aiogram.event: Update id=930479079 is handled. Duration 811 ms by bot id=8947405682
+2026-09-16 17:27:35,789 [INFO] aiogram.event: Update id=930479078 is handled. Duration 2876 ms by bot id=8947405682
+2026-09-16 17:27:46,006 [INFO] aiogram.event: Update id=930479080 is handled. Duration 132 ms by bot id=8947405682
+2026-09-16 17:28:21,408 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:29:21,411 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:30:21,413 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:31:21,416 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:32:21,419 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:33:21,420 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:34:21,421 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:35:21,423 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:36:21,427 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:37:21,429 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:38:21,433 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:39:21,435 [INFO] main: Refreshed event matcher: 0 active matched pairs
+2026-09-16 17:40:20,578 [INFO] main: Refreshed event matcher: 0 active matched pairs

@@ -240,3 +240,4 @@ class DatabaseStorage:
                 health.message
             ))
             await db.commit()
+
