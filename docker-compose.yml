@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: polymarket_desync_scanner
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./polymarket_desync.log:/app/polymarket_desync.log
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: polymarket_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
