@@ -40,7 +40,29 @@ class DesyncScannerApp:
 
         self.matched_pairs: Dict[str, MatchedPair] = {}  # poly_event_id -> MatchedPair
         self.processed_signal_ids = set()
+        self.active_signals: List[ArbitrageOpportunity] = []
+        self._signal_listeners: List[Callable[[ArbitrageOpportunity], Awaitable[None]]] = []
         self._running = False
+
+    def add_signal_listener(self, callback: Callable[[ArbitrageOpportunity], Awaitable[None]]):
+        """Registers listener to be called whenever a new arb/desync signal is found."""
+        self._signal_listeners.append(callback)
+
+    async def _emit_signal(self, sig: ArbitrageOpportunity):
+        sig_key = f"{sig.poly_event_id}:{sig.poly_outcome_selected}:{sig.profit_pct:.1f}"
+        if sig_key not in self.processed_signal_ids:
+            self.processed_signal_ids.add(sig_key)
+            self.active_signals.insert(0, sig)
+            if len(self.active_signals) > 100:
+                self.active_signals.pop()
+            logger.info(f"🚨 [{sig.signal_type.value.upper()}] Signal Detected: {sig.event_title} | ROI: +{sig.profit_pct}%")
+            await self.storage.save_arb_signal(sig)
+            await self.notifier.send_alert(sig)
+            for listener in self._signal_listeners:
+                try:
+                    await listener(sig)
+                except Exception as ex:
+                    logger.error(f"Error in signal listener: {ex}")
 
     async def _on_poly_update(self, token_id: str, orderbook: Orderbook):
         """Low-latency callback triggered instantly when Polymarket orderbook updates."""
@@ -74,12 +96,7 @@ class DesyncScannerApp:
         )
 
         for sig in signals:
-            sig_key = f"{sig.poly_event_id}:{sig.poly_outcome_selected}:{sig.profit_pct:.1f}"
-            if sig_key not in self.processed_signal_ids:
-                self.processed_signal_ids.add(sig_key)
-                logger.info(f"🚨 [{sig.signal_type.value.upper()}] Signal Detected: {sig.event_title} | ROI: +{sig.profit_pct}%")
-                await self.storage.save_arb_signal(sig)
-                await self.notifier.send_alert(sig)
+            await self._emit_signal(sig)
 
     async def _on_bk_update(self, bk_event: StandardizedEvent):
         """Low-latency callback triggered instantly when Bookmaker odds update."""
@@ -101,26 +118,29 @@ class DesyncScannerApp:
                 )
 
                 for sig in signals:
-                    sig_key = f"{sig.poly_event_id}:{sig.poly_outcome_selected}:{sig.profit_pct:.1f}"
-                    if sig_key not in self.processed_signal_ids:
-                        self.processed_signal_ids.add(sig_key)
-                        logger.info(f"🚨 [{sig.signal_type.value.upper()}] Signal Detected: {sig.event_title} | ROI: +{sig.profit_pct}%")
-                        await self.storage.save_arb_signal(sig)
-                        await self.notifier.send_alert(sig)
+                    await self._emit_signal(sig)
+
+    async def refresh_matches(self):
+        """Refreshes matched pairs between Polymarket and bookmakers immediately."""
+        poly_events = list(self.poly_ws.active_events.values())
+        bk_events = list(self.mock_bk.events.values()) + list(self.odds_api.events.values())
+
+        if poly_events and bk_events:
+            matches = self.matcher.match_events(bk_events, poly_events)
+            for m in matches:
+                self.matched_pairs[m.polymarket_event_id] = m
+                await self.storage.save_matched_pair(m)
+            logger.info(f"Refreshed event matcher: {len(self.matched_pairs)} active matched pairs")
+            return matches
+        return []
 
     async def _matching_loop(self):
         """Periodic loop to refresh event matching between platforms."""
+        # Initial run after brief delay to let parsers populate
+        await asyncio.sleep(2)
         while self._running:
             try:
-                poly_events = list(self.poly_ws.active_events.values())
-                bk_events = list(self.mock_bk.events.values()) + list(self.odds_api.events.values())
-
-                if poly_events and bk_events:
-                    matches = self.matcher.match_events(bk_events, poly_events)
-                    for m in matches:
-                        self.matched_pairs[m.polymarket_event_id] = m
-                        await self.storage.save_matched_pair(m)
-                    logger.info(f"Refreshed event matcher: {len(self.matched_pairs)} active matched pairs")
+                await self.refresh_matches()
             except Exception as e:
                 logger.error(f"Error in matching loop: {e}")
 
@@ -179,8 +199,14 @@ async def main():
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    if "--no-web" in sys.argv or not getattr(config, "WEB_ENABLED", True):
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            pass
+    else:
+        import uvicorn
+        logger.info(f"🚀 Starting PolyArb Terminal with Web UI on http://{config.WEB_HOST}:{config.WEB_PORT}")
+        uvicorn.run("app:app", host=config.WEB_HOST, port=config.WEB_PORT, reload=False, log_level="info")
+
 

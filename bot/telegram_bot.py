@@ -39,8 +39,15 @@ def format_signal_message(signal: ArbitrageOpportunity) -> str:
     bk_leg_team = signal.team2 if poly_leg_team == signal.team1 else signal.team1
     bk_leg_odds = signal.bk_team2_odds if poly_leg_team == signal.team1 else signal.bk_team1_odds
 
+    poly_leg_price = signal.poly_team1_vwap if poly_leg_team == signal.team1 else signal.poly_team2_vwap
+    poly_cents = round(poly_leg_price * 100, 1)
+    cents_str = f"{poly_cents:.0f}" if poly_cents.is_integer() else f"{poly_cents:.1f}"
+
     poly_url = f"[Polymarket]({signal.poly_market_url})" if signal.poly_market_url else "Polymarket"
     bk_url = f"[{signal.bk_platform}]({signal.bk_market_url})" if signal.bk_market_url else signal.bk_platform
+
+    poly_link_row = f"   • 🔗 [Открыть маркет на Polymarket]({signal.poly_market_url})\n" if signal.poly_market_url else ""
+    bk_link_row = f"   • 🔗 [Открыть матч в {signal.bk_platform}]({signal.bk_market_url})\n" if signal.bk_market_url else ""
 
     msg = (
         f"{header}\n"
@@ -48,14 +55,17 @@ def format_signal_message(signal: ArbitrageOpportunity) -> str:
         f"⚔️ *Матч:* `{signal.event_title}` ({time_str})\n\n"
 
         f"🟢 *Плечо 1 ({poly_url}):*\n"
-        f"   • Исход: BUY `{poly_leg_team}`\n"
-        f"   • Цена VWAP: `{signal.poly_team1_vwap if poly_leg_team == signal.team1 else signal.poly_team2_vwap:.3f}` (P_{{implied}} = `{signal.poly_implied_prob1 if poly_leg_team == signal.team1 else signal.poly_implied_prob2:.1%}`)\n"
-        f"   • Рекомендуемый взнос: `${signal.poly_stake:.2f}`\n\n"
+        f"   • Исход: BUY YES `{poly_leg_team}`\n"
+        f"   • Цена Polymarket: `{cents_str}¢` (`{cents_str} центов` / `${poly_leg_price:.3f}`)\n"
+        f"   • Вероятность: `P_impl` = `{signal.poly_implied_prob1 if poly_leg_team == signal.team1 else signal.poly_implied_prob2:.1%}`\n"
+        f"   • Рекомендуемый взнос: `${signal.poly_stake:.2f}`\n"
+        f"{poly_link_row}\n"
 
         f"🔵 *Плечо 2 ({bk_url}):*\n"
         f"   • Исход: BET `{bk_leg_team}`\n"
-        f"   • Коэффициент: `{bk_leg_odds:.2f}` (P_{{implied}} = `{1.0/bk_leg_odds:.1%}`)\n"
-        f"   • Рекомендуемый взнос: `${signal.bk_stake:.2f}`\n\n"
+        f"   • Коэффициент в БК: `{bk_leg_odds:.2f}` (`P_impl` = `{1.0/bk_leg_odds:.1%}`)\n"
+        f"   • Рекомендуемый взнос: `${signal.bk_stake:.2f}`\n"
+        f"{bk_link_row}\n"
 
         f"💰 *ФИНАНСОВЫЙ ИТОГ:*\n"
         f"   • Общий банк: `${signal.total_stake:.2f}`\n"

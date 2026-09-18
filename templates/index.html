@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PolyArb Terminal | Polymarket & БК Arbitrage</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              500: '#10b981',
+              600: '#059669',
+            },
+            darkbg: '#0a0d14',
+            darkcard: '#121722',
+            darkborder: '#1e2638'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .pulse-live { animation: pulse-subtle 2s infinite; }
+    .glow-green { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15); }
+    .glow-amber { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0d14; }
+    ::-webkit-scrollbar-thumb { background: #1e2638; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #2a354d; }
+  </style>
+</head>
+<body class="bg-[#0a0d14] text-slate-200 min-h-screen font-sans antialiased flex flex-col">
+
+  <!-- Header / Top Bar -->
+  <header class="border-b border-[#1e2638] bg-[#121722]/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <i class="fa-solid fa-bolt text-white text-lg"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              PolyArb <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">PRO</span>
+            </h1>
+            <p class="text-xs text-slate-400">Polymarket ↔ БК Probability Desync Terminal</p>
+          </div>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-2 pl-6 border-l border-[#1e2638]">
+          <span class="flex h-2.5 w-2.5 relative">
+            <span id="scannerPulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span id="scannerDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span id="scannerStatusText" class="text-xs font-medium text-emerald-400">WebSocket Live</span>
+        </div>
+      </div>
+
+      <!-- Quick Stats & Actions -->
+      <div class="flex items-center space-x-3 sm:space-x-4">
+        <div class="hidden sm:flex items-center bg-[#171d2b] px-3 py-1.5 rounded-lg border border-[#1e2638] text-xs space-x-3">
+          <div>
+            <span class="text-slate-400">Сигналы:</span>
+            <span id="statSignalsCount" class="font-bold text-white ml-1">0</span>
+          </div>
+          <div class="border-l border-slate-700 pl-3">
+            <span class="text-slate-400">Матчи:</span>
+            <span id="statMatchesCount" class="font-bold text-cyan-400 ml-1">0</span>
+          </div>
+          <div class="border-l border-slate-700 pl-3">
+            <span class="text-slate-400">Ср. ROI:</span>
+            <span id="statAvgRoi" class="font-bold text-emerald-400 ml-1">+0.0%</span>
+          </div>
+        </div>
+
+        <button id="soundToggleBtn" onclick="toggleSound()" class="p-2 text-slate-400 hover:text-white bg-[#171d2b] hover:bg-[#1e2638] rounded-lg border border-[#1e2638] transition text-sm" title="Звуковое оповещение">
+          <i id="soundIcon" class="fa-solid fa-volume-high text-emerald-400"></i>
+        </button>
+
+        <button onclick="triggerMockJump()" class="hidden lg:flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold transition">
+          <i class="fa-solid fa-flask"></i>
+          <span>Тест скачка (Jump)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="border-b border-[#1e2638] bg-[#0e121a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 sm:space-x-2 overflow-x-auto py-2">
+      <button onclick="switchTab('signals')" id="tabBtn-signals" class="tab-btn px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center space-x-2 whitespace-nowrap transition">
+        <i class="fa-solid fa-bolt-lightning"></i>
+        <span>Сигналы арбитража</span>
+        <span id="activeBadge" class="ml-1.5 px-1.5 py-0.2 rounded-full bg-emerald-500 text-black text-[10px] font-bold">0</span>
+      </button>
+
+      <button onclick="switchTab('matches')" id="tabBtn-matches" class="tab-btn px-4 py-2 text-xs sm:text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#171d2b] border border-transparent flex items-center space-x-2 whitespace-nowrap transition">
+        <i class="fa-solid fa-handshake"></i>
+        <span>Сопоставленные матчи</span>
+        <span id="matchesBadge" class="ml-1.5 px-1.5 py-0.2 rounded-full bg-slate-700 text-slate-300 text-[10px]">0</span>
+      </button>
+
+      <button onclick="switchTab('analytics')" id="tabBtn-analytics" class="tab-btn px-4 py-2 text-xs sm:text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#171d2b] border border-transparent flex items-center space-x-2 whitespace-nowrap transition">
+        <i class="fa-solid fa-chart-line"></i>
+        <span>Журнал & Аналитика</span>
+      </button>
+
+      <button onclick="switchTab('settings')" id="tabBtn-settings" class="tab-btn px-4 py-2 text-xs sm:text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#171d2b] border border-transparent flex items-center space-x-2 whitespace-nowrap transition">
+        <i class="fa-solid fa-gear"></i>
+        <span>Настройки & API</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content Body -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- TAB 1: ARBITRAGE SIGNALS -->
+    <div id="tabContent-signals" class="space-y-6">
+      <!-- Filter Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-[#121722] p-3 rounded-xl border border-[#1e2638]">
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <button onclick="setSignalFilter('all')" id="filter-all" class="filter-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-700 text-white">Все</button>
+          <button onclick="setSignalFilter('dynamic')" id="filter-dynamic" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#1a2130]">⚡ Dynamic Desync</button>
+          <button onclick="setSignalFilter('static')" id="filter-static" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#1a2130]">📊 Static Arb</button>
+          <button onclick="setSignalFilter('accepted')" id="filter-accepted" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#1a2130]">✅ Принятые</button>
+          <button onclick="setSignalFilter('skipped')" id="filter-skipped" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#1a2130]">❌ Пропущенные</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="refreshData()" class="px-3 py-1 text-xs font-medium text-slate-300 hover:text-white bg-[#171d2b] hover:bg-[#1e2638] rounded-lg border border-[#1e2638] flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>Обновить</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Signals Grid / Container -->
+      <div id="signalsContainer" class="grid grid-cols-1 gap-4">
+        <!-- Signal cards injected dynamically -->
+        <div id="noSignalsPlaceholder" class="p-12 text-center bg-[#121722] rounded-2xl border border-[#1e2638] space-y-3">
+          <div class="w-16 h-16 mx-auto rounded-full bg-[#171d2b] flex items-center justify-center text-slate-500 text-2xl">
+            <i class="fa-solid fa-radar pulse-live"></i>
+          </div>
+          <h3 class="text-base font-semibold text-white">Сканер активен и ожидает сигналов</h3>
+          <p class="text-xs text-slate-400 max-w-md mx-auto">
+            Система непрерывно отслеживает котировки стакана Polymarket по WebSocket и сравнивает с коэффициентами БК. При появлении расхождений сигнал появится здесь мгновенно.
+          </p>
+          <div class="pt-2">
+            <button onclick="triggerMockJump()" class="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-bolt mr-1"></i> Проверить симуляцией скачка (Test Jump)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: MATCHED PAIRS -->
+    <div id="tabContent-matches" class="hidden space-y-4">
+      <div class="bg-[#121722] p-5 rounded-2xl border border-[#1e2638]">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-handshake text-cyan-400"></i>
+              Сопоставленные события (Polymarket ↔ БК)
+            </h2>
+            <p class="text-xs text-slate-400">События, успешно синхронизированные fuzzy-матчером с оценкой схожести</p>
+          </div>
+          <span id="matchedPairsCountBadge" class="text-xs px-2.5 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg font-semibold">0 матчей</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-[#1e2638] text-slate-400 uppercase tracking-wider text-[10px]">
+                <th class="py-3 px-4">Дисциплина</th>
+                <th class="py-3 px-4">Матч в БК</th>
+                <th class="py-3 px-4">Матч на Polymarket</th>
+                <th class="py-3 px-4">Турнир</th>
+                <th class="py-3 px-4">Уверенность (Conf)</th>
+                <th class="py-3 px-4 text-right">Статус</th>
+              </tr>
+            </thead>
+            <tbody id="matchesTableBody" class="divide-y divide-[#1e2638]/50">
+              <tr>
+                <td colspan="6" class="text-center py-8 text-slate-500">Загрузка сопоставлений...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: ANALYTICS & TRADE JOURNAL -->
+    <div id="tabContent-analytics" class="hidden space-y-6">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-[#121722] p-4 rounded-xl border border-[#1e2638]">
+          <span class="text-xs text-slate-400">Всего сигналов</span>
+          <p id="anTotalSignals" class="text-2xl font-bold text-white mt-1">0</p>
+        </div>
+        <div class="bg-[#121722] p-4 rounded-xl border border-[#1e2638]">
+          <span class="text-xs text-slate-400">Dynamic Desyncs</span>
+          <p id="anDynamicCount" class="text-2xl font-bold text-amber-400 mt-1">0</p>
+        </div>
+        <div class="bg-[#121722] p-4 rounded-xl border border-[#1e2638]">
+          <span class="text-xs text-slate-400">Принято сделок</span>
+          <p id="anAcceptedCount" class="text-2xl font-bold text-emerald-400 mt-1">0</p>
+        </div>
+        <div class="bg-[#121722] p-4 rounded-xl border border-[#1e2638]">
+          <span class="text-xs text-slate-400">Исполняемость (% accepted)</span>
+          <p id="anAcceptanceRate" class="text-2xl font-bold text-cyan-400 mt-1">0.0%</p>
+        </div>
+      </div>
+
+      <div class="bg-[#121722] p-5 rounded-2xl border border-[#1e2638]">
+        <h3 class="text-sm font-bold text-white mb-3">История принятых / отклоненных сигналов</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-[#1e2638] text-slate-400 uppercase tracking-wider text-[10px]">
+                <th class="py-3 px-4">Время</th>
+                <th class="py-3 px-4">Матч</th>
+                <th class="py-3 px-4">Тип</th>
+                <th class="py-3 px-4">ROI</th>
+                <th class="py-3 px-4">Решение</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody" class="divide-y divide-[#1e2638]/50">
+              <tr>
+                <td colspan="5" class="text-center py-6 text-slate-500">История пока пуста</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: SETTINGS & API KEYS -->
+    <div id="tabContent-settings" class="hidden space-y-6">
+      <div class="bg-[#121722] p-6 rounded-2xl border border-[#1e2638] max-w-3xl">
+        <h2 class="text-base font-bold text-white mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-emerald-400"></i>
+          Параметры детекции и API ключи
+        </h2>
+
+        <form id="settingsForm" onsubmit="saveSettings(event)" class="space-y-5">
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-slate-300">The-Odds-API Ключ (Букмекеры)</label>
+            <div class="flex gap-2">
+              <input type="password" id="cfgOddsApiKey" placeholder="Вставьте ваш API ключ The Odds API..." class="flex-1 px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 transition">
+              <button type="button" onclick="toggleApiKeyVisibility()" class="px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-slate-400 hover:text-white">
+                <i id="eyeIcon" class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500">При пустом ключе сканер автоматически использует встроенный эмулятор котировок (Pinnacle Mock).</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Типичный банк на сделку ($ USD)</label>
+              <input type="number" id="cfgStake" step="50" min="10" class="w-full px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Минимальный порог ROI (%)</label>
+              <input type="number" id="cfgMinRoi" step="0.5" min="0.1" class="w-full px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Комиссия Polymarket Taker (%)</label>
+              <input type="number" id="cfgTakerFee" step="0.5" min="0" class="w-full px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Макс. допустимое проскальзывание (%)</label>
+              <input type="number" id="cfgSlippage" step="0.5" min="0" class="w-full px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Dynamic Desync: порог скачка (%)</label>
+              <input type="number" id="cfgDesyncDelta" step="0.5" min="1" class="w-full px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Окно скачка цены (сек)</label>
+              <input type="number" id="cfgDesyncWindow" step="1" min="1" class="w-full px-3 py-2 bg-[#171d2b] border border-[#1e2638] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+          </div>
+
+          <div class="pt-2 flex items-center justify-between">
+            <span id="saveStatus" class="text-xs text-emerald-400 font-medium hidden">Настройки успешно сохранены!</span>
+            <button type="submit" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-lg text-xs transition shadow-lg shadow-emerald-500/20 ml-auto">
+              Сохранить параметры
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer / Status Strip -->
+  <footer class="border-t border-[#1e2638] bg-[#0c0f17] py-3 text-[11px] text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center space-x-4">
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Polymarket CLOB WS</span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Bookmaker Feed</span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Telegram Notifier (@PolyCorm_bot)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> SQLite Storage</span>
+      </div>
+      <div>
+        <span>PolyArb Engine 2.0 • Real-time Arbitrage</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Frontend JS Logic -->
+  <script>
+    let signals = [];
+    let matchedPairs = [];
+    let soundEnabled = true;
+    let currentFilter = 'all';
+    let ws = null;
+    let audioCtx = null;
+
+    function playBeep() {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        console.warn('Audio play error:', e);
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById('soundIcon');
+      if (soundEnabled) {
+        icon.className = 'fa-solid fa-volume-high text-emerald-400';
+      } else {
+        icon.className = 'fa-solid fa-volume-xmark text-slate-500';
+      }
+    }
+
+    function switchTab(tabId) {
+      ['signals', 'matches', 'analytics', 'settings'].forEach(t => {
+        const btn = document.getElementById(`tabBtn-${t}`);
+        const content = document.getElementById(`tabContent-${t}`);
+        if (t === tabId) {
+          btn.className = 'tab-btn px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center space-x-2 whitespace-nowrap transition';
+          content.classList.remove('hidden');
+        } else {
+          btn.className = 'tab-btn px-4 py-2 text-xs sm:text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#171d2b] border border-transparent flex items-center space-x-2 whitespace-nowrap transition';
+          content.classList.add('hidden');
+        }
+      });
+      if (tabId === 'matches') fetchMatches();
+      if (tabId === 'analytics') fetchAnalytics();
+      if (tabId === 'settings') loadSettings();
+    }
+
+    function setSignalFilter(filter) {
+      currentFilter = filter;
+      ['all', 'dynamic', 'static', 'accepted', 'skipped'].forEach(f => {
+        const b = document.getElementById(`filter-${f}`);
+        if (f === filter) {
+          b.className = 'filter-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-700 text-white';
+        } else {
+          b.className = 'filter-btn px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white hover:bg-[#1a2130]';
+        }
+      });
+      renderSignals();
+    }
+
+    function renderSignals() {
+      const container = document.getElementById('signalsContainer');
+      const filtered = signals.filter(s => {
+        if (currentFilter === 'dynamic') return s.signal_type.toLowerCase() === 'dynamic';
+        if (currentFilter === 'static') return s.signal_type.toLowerCase() === 'static';
+        if (currentFilter === 'accepted') return s.status === 'accepted';
+        if (currentFilter === 'skipped') return s.status === 'skipped';
+        return true;
+      });
+
+      document.getElementById('activeBadge').textContent = signals.filter(s => s.status === 'pending').length;
+      document.getElementById('statSignalsCount').textContent = signals.length;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-12 text-center bg-[#121722] rounded-2xl border border-[#1e2638] space-y-3">
+            <div class="w-16 h-16 mx-auto rounded-full bg-[#171d2b] flex items-center justify-center text-slate-500 text-2xl">
+              <i class="fa-solid fa-radar pulse-live"></i>
+            </div>
+            <h3 class="text-base font-semibold text-white">Нет сигналов по выбранному фильтру</h3>
+            <p class="text-xs text-slate-400 max-w-md mx-auto">
+              Попробуйте переключить фильтр или протестировать работу кнопкой "Тест скачка (Jump)".
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(sig => {
+        const isDynamic = sig.signal_type.toLowerCase() === 'dynamic';
+        const polyLegTeam = sig.poly_outcome_selected;
+        const bkLegTeam = polyLegTeam === sig.team1 ? sig.team2 : sig.team1;
+        const polyVwap = polyLegTeam === sig.team1 ? sig.poly_team1_vwap : sig.poly_team2_vwap;
+        const polyProb = polyLegTeam === sig.team1 ? sig.poly_implied_prob1 : sig.poly_implied_prob2;
+        const bkOdds = polyLegTeam === sig.team1 ? sig.bk_team2_odds : sig.bk_team1_odds;
+        const bkProb = 1.0 / (bkOdds || 1.0);
+
+        const borderClass = isDynamic ? 'border-amber-500/40 glow-amber' : 'border-emerald-500/30 glow-green';
+        const badgeClass = isDynamic 
+          ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' 
+          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+
+        const statusTag = sig.status === 'accepted'
+          ? `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">✅ Принято</span>`
+          : sig.status === 'skipped'
+          ? `<span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold">❌ Пропущено</span>`
+          : `<span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold">⏳ Ожидает</span>`;
+
+        return `
+          <div class="bg-[#121722] rounded-2xl border ${borderClass} p-5 space-y-4 transition duration-300">
+            <!-- Card Header -->
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e2638] pb-3">
+              <div class="flex items-center space-x-2.5">
+                <span class="px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 ${badgeClass}">
+                  <i class="fa-solid ${isDynamic ? 'fa-bolt' : 'fa-chart-pie'}"></i>
+                  ${isDynamic ? `DYNAMIC DESYNC (+${sig.price_change_delta_pct.toFixed(1)}%)` : 'STATIC ARBITRAGE'}
+                </span>
+                <span class="text-xs font-semibold text-slate-300">${sig.game} • ${sig.tournament}</span>
+                ${statusTag}
+              </div>
+
+              <div class="flex items-center space-x-3 text-xs">
+                <span class="text-slate-400">Свежесть: <strong class="text-slate-200">${sig.data_freshness_sec.toFixed(1)}s</strong></span>
+                <span class="text-xs px-2.5 py-1 rounded-lg bg-emerald-500 text-black font-extrabold text-sm">
+                  +${sig.profit_pct.toFixed(2)}% ROI
+                </span>
+              </div>
+            </div>
+
+            <!-- Match Title -->
+            <div>
+              <h2 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
+                <span>⚔️</span> ${sig.event_title}
+              </h2>
+            </div>
+
+            <!-- Dual Legs Comparison Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <!-- Leg 1: Polymarket -->
+              <div class="bg-[#171d2b] p-3.5 rounded-xl border border-emerald-500/20 space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-emerald-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-check"></i> Плечо 1: Polymarket (BUY)
+                  </span>
+                  ${sig.poly_market_url ? `<a href="${sig.poly_market_url}" target="_blank" class="text-emerald-400 hover:text-emerald-300 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1 text-[11px] font-semibold">Открыть Polymarket <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i></a>` : ''}
+                </div>
+
+                <div class="text-sm font-bold text-white flex items-center justify-between">
+                  <div>Исход: <span class="text-emerald-300">YES ${polyLegTeam}</span></div>
+                  <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-mono font-extrabold text-xs">
+                    ${(polyVwap * 100).toFixed(1)}¢ (${(polyVwap * 100).toFixed(0)} центов)
+                  </span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#1e2638]">
+                  <div>
+                    <span class="text-slate-400">Цена входа:</span>
+                    <p class="font-mono font-bold text-white">${(polyVwap * 100).toFixed(0)}¢ ($${polyVwap.toFixed(3)})</p>
+                    <span class="text-[10px] text-slate-500">P_impl: ${(polyProb * 100).toFixed(1)}%</span>
+                  </div>
+                  <div>
+                    <span class="text-slate-400">Реком. взнос:</span>
+                    <p class="font-mono font-bold text-emerald-400">$${sig.poly_stake.toFixed(2)}</p>
+                    <span class="text-[10px] text-slate-500">Доступно: $${sig.max_executable_stake_usd.toFixed(0)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Leg 2: Bookmaker -->
+              <div class="bg-[#171d2b] p-3.5 rounded-xl border border-cyan-500/20 space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-cyan-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-building-columns"></i> Плечо 2: ${sig.bk_platform} (BET)
+                  </span>
+                  ${sig.bk_market_url ? `<a href="${sig.bk_market_url}" target="_blank" class="text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 flex items-center gap-1 text-[11px] font-bold">Открыть матч в ${sig.bk_platform} <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i></a>` : ''}
+                </div>
+
+                <div class="text-sm font-bold text-white flex items-center justify-between">
+                  <div>Исход: <span class="text-cyan-300">${bkLegTeam}</span></div>
+                  <span class="px-2.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 font-mono font-extrabold text-xs">
+                    Кэф ${bkOdds.toFixed(2)}
+                  </span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#1e2638]">
+                  <div>
+                    <span class="text-slate-400">Коэффициент БК:</span>
+                    <p class="font-mono font-bold text-white">${bkOdds.toFixed(2)}</p>
+                    <span class="text-[10px] text-slate-500">P_impl: ${(bkProb * 100).toFixed(1)}%</span>
+                  </div>
+                  <div>
+                    <span class="text-slate-400">Реком. взнос:</span>
+                    <p class="font-mono font-bold text-cyan-400">$${sig.bk_stake.toFixed(2)}</p>
+                    <span class="text-[10px] text-slate-500">Банк: $${sig.total_stake.toFixed(0)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Financial Summary Bar & Action Buttons -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#1e2638]">
+              <div class="flex items-center space-x-4 text-xs">
+                <div>
+                  <span class="text-slate-400">Сумма P (Σq):</span>
+                  <strong class="text-slate-200 ml-1 font-mono">${sig.sum_implied_prob.toFixed(4)}</strong>
+                </div>
+                <div>
+                  <span class="text-slate-400">Чистый профит:</span>
+                  <strong class="text-emerald-400 ml-1 font-mono">+$${sig.net_profit_usd.toFixed(2)}</strong>
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-2">
+                <button onclick="handleAction('${sig.signal_id}', 'accept')" class="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-lg transition flex items-center gap-1.5 shadow-sm shadow-emerald-500/30">
+                  <i class="fa-solid fa-check"></i>
+                  <span>Принять сделку</span>
+                </button>
+                <button onclick="handleAction('${sig.signal_id}', 'skip')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs rounded-lg transition flex items-center gap-1.5 border border-[#1e2638]">
+                  <i class="fa-solid fa-xmark"></i>
+                  <span>Пропустить</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function handleAction(signalId, action) {
+      try {
+        const resp = await fetch(`/api/signals/${signalId}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: action })
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          const sig = signals.find(s => s.signal_id === signalId);
+          if (sig) sig.status = action === 'accept' ? 'accepted' : 'skipped';
+          renderSignals();
+          fetchAnalytics();
+        }
+      } catch (e) {
+        console.error('Error updating signal action:', e);
+      }
+    }
+
+    async function triggerMockJump() {
+      try {
+        const resp = await fetch('/api/simulate/jump', { method: 'POST' });
+        const res = await resp.json();
+        if (res.status === 'ok') {
+          playBeep();
+        }
+      } catch (e) {
+        console.error('Error triggering mock jump:', e);
+      }
+    }
+
+    async function fetchMatches() {
+      try {
+        const resp = await fetch('/api/matches');
+        const data = await resp.json();
+        matchedPairs = data.matches || [];
+        document.getElementById('matchesBadge').textContent = matchedPairs.length;
+        document.getElementById('statMatchesCount').textContent = matchedPairs.length;
+        document.getElementById('matchedPairsCountBadge').textContent = `${matchedPairs.length} активных матчей`;
+
+        const tbody = document.getElementById('matchesTableBody');
+        if (matchedPairs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">Нет сопоставленных событий</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = matchedPairs.map(m => `
+          <tr class="hover:bg-[#171d2b]/60 transition">
+            <td class="py-3 px-4 font-semibold text-white">${m.game}</td>
+            <td class="py-3 px-4 font-mono text-cyan-300">${m.bk_title} <span class="text-slate-500">(${m.bk_platform})</span></td>
+            <td class="py-3 px-4 font-mono text-emerald-300">${m.poly_title}</td>
+            <td class="py-3 px-4 text-slate-400">${m.tournament}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded-full ${m.confidence >= 0.95 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'} text-[11px] font-bold">
+                ${(m.confidence * 100).toFixed(0)}% (${m.match_type})
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <span class="inline-flex items-center gap-1 text-emerald-400 text-xs font-semibold">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Мониторинг
+              </span>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Error fetching matches:', e);
+      }
+    }
+
+    async function fetchAnalytics() {
+      try {
+        const resp = await fetch('/api/analytics');
+        const d = await resp.json();
+        document.getElementById('anTotalSignals').textContent = d.total_signals || 0;
+        document.getElementById('anDynamicCount').textContent = d.dynamic_count || 0;
+        document.getElementById('anAcceptedCount').textContent = d.accepted_count || 0;
+        document.getElementById('anAcceptanceRate').textContent = `${d.acceptance_rate || 0.0}%`;
+        document.getElementById('statAvgRoi').textContent = `+${d.avg_profit_pct || 0.0}%`;
+
+        const historyTbody = document.getElementById('historyTableBody');
+        const history = d.recent_history || [];
+        if (history.length === 0) {
+          historyTbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">История пока пуста</td></tr>`;
+          return;
+        }
+
+        historyTbody.innerHTML = history.map(h => `
+          <tr class="hover:bg-[#171d2b]/60">
+            <td class="py-2.5 px-4 text-slate-400">${new Date(h.timestamp * 1000).toLocaleTimeString()}</td>
+            <td class="py-2.5 px-4 font-semibold text-white">${h.event_title}</td>
+            <td class="py-2.5 px-4">${h.signal_type}</td>
+            <td class="py-2.5 px-4 text-emerald-400 font-mono font-bold">+${h.profit_pct}%</td>
+            <td class="py-2.5 px-4">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.action === 'accepted' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">
+                ${h.action === 'accepted' ? 'Принято' : 'Пропущено'}
+              </span>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Error fetching analytics:', e);
+      }
+    }
+
+    async function loadSettings() {
+      try {
+        const resp = await fetch('/api/config');
+        const c = await resp.json();
+        document.getElementById('cfgOddsApiKey').value = c.odds_api_key || '';
+        document.getElementById('cfgStake').value = c.typical_stake_usd || 1000;
+        document.getElementById('cfgMinRoi').value = c.min_profit_threshold_pct || 5.0;
+        document.getElementById('cfgTakerFee').value = c.polymarket_taker_fee_pct || 2.0;
+        document.getElementById('cfgSlippage').value = c.max_slippage_pct || 1.0;
+        document.getElementById('cfgDesyncDelta').value = c.dynamic_desync_delta_pct || 5.0;
+        document.getElementById('cfgDesyncWindow').value = c.dynamic_desync_window_sec || 5.0;
+      } catch (e) {
+        console.error('Error loading config:', e);
+      }
+    }
+
+    function toggleApiKeyVisibility() {
+      const inp = document.getElementById('cfgOddsApiKey');
+      const icon = document.getElementById('eyeIcon');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash';
+      } else {
+        inp.type = 'password';
+        icon.className = 'fa-solid fa-eye';
+      }
+    }
+
+    async function saveSettings(e) {
+      e.preventDefault();
+      const payload = {
+        odds_api_key: document.getElementById('cfgOddsApiKey').value.trim(),
+        typical_stake_usd: parseFloat(document.getElementById('cfgStake').value),
+        min_profit_threshold_pct: parseFloat(document.getElementById('cfgMinRoi').value),
+        polymarket_taker_fee_pct: parseFloat(document.getElementById('cfgTakerFee').value),
+        max_slippage_pct: parseFloat(document.getElementById('cfgSlippage').value),
+        dynamic_desync_delta_pct: parseFloat(document.getElementById('cfgDesyncDelta').value),
+        dynamic_desync_window_sec: parseFloat(document.getElementById('cfgDesyncWindow').value),
+      };
+
+      try {
+        const resp = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const res = await resp.json();
+        if (res.status === 'ok') {
+          const st = document.getElementById('saveStatus');
+          st.classList.remove('hidden');
+          setTimeout(() => st.classList.add('hidden'), 3000);
+        }
+      } catch (err) {
+        alert('Ошибка сохранения настроек: ' + err);
+      }
+    }
+
+    async function refreshData() {
+      try {
+        const resp = await fetch('/api/signals');
+        const data = await resp.json();
+        signals = data.signals || [];
+        renderSignals();
+        fetchMatches();
+        fetchAnalytics();
+      } catch (e) {
+        console.error('Error refreshing signals:', e);
+      }
+    }
+
+    function initWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/live`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WS connected to PolyArb backend');
+        document.getElementById('scannerStatusText').textContent = 'WebSocket Live';
+        document.getElementById('scannerPulse').className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+        document.getElementById('scannerDot').className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'new_signal') {
+            const exists = signals.some(s => s.signal_id === msg.data.signal_id);
+            if (!exists) {
+              signals.unshift(msg.data);
+              playBeep();
+              renderSignals();
+              fetchAnalytics();
+            }
+          } else if (msg.type === 'signals_update') {
+            signals = msg.data;
+            renderSignals();
+          } else if (msg.type === 'matches_update') {
+            matchedPairs = msg.data;
+            document.getElementById('matchesBadge').textContent = matchedPairs.length;
+            document.getElementById('statMatchesCount').textContent = matchedPairs.length;
+          }
+        } catch (e) {
+          console.error('WS message error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.warn('WS disconnected. Reconnecting in 2s...');
+        document.getElementById('scannerStatusText').textContent = 'Connecting...';
+        document.getElementById('scannerPulse').className = 'hidden';
+        document.getElementById('scannerDot').className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500';
+        setTimeout(initWebSocket, 2000);
+      };
+    }
+
+    // Startup initial load
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshData();
+      initWebSocket();
+      setInterval(refreshData, 10000); // Background polling fallback
+    });
+  </script>
+</body>
+</html>

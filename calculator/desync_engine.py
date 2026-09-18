@@ -178,120 +178,210 @@ class DesyncDetector:
         max_delta = max(delta_p1, delta_p2, delta_b1, delta_b2)
         signal_type = SignalType.DYNAMIC if is_dynamic else SignalType.STATIC
 
-        # Option A: Buy Team 1 on Polymarket, Bet Team 2 on BK
-        cost_poly1 = vwap1 / self.fee_factor
-        cost_bk2 = bk_prob2
-        sum_cost_a = cost_poly1 + cost_bk2
+        # Detect if event is 3-way (Soccer / matches with Draw)
+        has_draw = (
+            any(o.name.lower() in ["draw", "tie"] for o in poly_event.outcomes)
+            or any(o.name.lower() in ["draw", "tie"] for o in bk_event.outcomes)
+            or poly_event.game.lower() in ["soccer", "football"]
+        )
 
-        if sum_cost_a < 1.0:
-            profit_pct_a = ((1.0 / sum_cost_a) - 1.0) * 100.0
-            if profit_pct_a >= self.min_profit_pct:
-                poly_stake = self.typical_stake_usd * (cost_poly1 / sum_cost_a)
-                bk_stake = self.typical_stake_usd * (cost_bk2 / sum_cost_a)
+        if not has_draw:
+            # 2-way Sports (CS2, LoL, Dota 2, MMA, Tennis): Cross-hedging covers 100% of outcomes
+            # Option A: Buy Team 1 on Polymarket, Bet Team 2 on BK
+            cost_poly1 = vwap1 / self.fee_factor
+            cost_bk2 = bk_prob2
+            sum_cost_a = cost_poly1 + cost_bk2
 
-                exact_vwap1 = calculate_buy_vwap(ob1.asks, poly_stake)
-                if exact_vwap1 is not None:
-                    cost_poly1_exact = exact_vwap1 / self.fee_factor
-                    sum_cost_exact = cost_poly1_exact + cost_bk2
-                    final_profit_pct = ((1.0 / sum_cost_exact) - 1.0) * 100.0
+            if sum_cost_a < 1.0:
+                profit_pct_a = ((1.0 / sum_cost_a) - 1.0) * 100.0
+                if profit_pct_a >= self.min_profit_pct:
+                    poly_stake = self.typical_stake_usd * (cost_poly1 / sum_cost_a)
+                    bk_stake = self.typical_stake_usd * (cost_bk2 / sum_cost_a)
 
-                    if final_profit_pct >= self.min_profit_pct:
-                        target_payout = self.typical_stake_usd / sum_cost_exact
+                    exact_vwap1 = calculate_buy_vwap(ob1.asks, poly_stake)
+                    if exact_vwap1 is not None:
+                        cost_poly1_exact = exact_vwap1 / self.fee_factor
+                        sum_cost_exact = cost_poly1_exact + cost_bk2
+                        final_profit_pct = ((1.0 / sum_cost_exact) - 1.0) * 100.0
+
+                        if final_profit_pct >= self.min_profit_pct:
+                            target_payout = self.typical_stake_usd / sum_cost_exact
+                            net_profit_usd = target_payout - self.typical_stake_usd
+
+                            # Per-leg profit verification
+                            leg1_profit = (poly_stake * (1.0 / exact_vwap1) * self.fee_factor) - (poly_stake + bk_stake)
+                            leg2_profit = (bk_stake * bk_odds2) - (poly_stake + bk_stake)
+
+                            # Liquidity check
+                            max_exec_usd, _ = calculate_max_executable_liquidity(ob1.asks, self.max_slippage_pct)
+
+                            data_freshness = max(
+                                now - poly_event.timestamp,
+                                now - bk_event.timestamp,
+                                now - ob1.timestamp
+                            )
+
+                            opportunities.append(ArbitrageOpportunity(
+                                signal_id=str(uuid.uuid4()),
+                                signal_type=signal_type,
+                                event_title=f"{poly_event.team1} vs {poly_event.team2}",
+                                game=poly_event.game,
+                                tournament=poly_event.tournament,
+                                team1=poly_event.team1,
+                                team2=poly_event.team2,
+                                start_time=poly_event.start_time,
+                                bk_platform=bk_event.platform,
+                                bk_event_id=bk_event.event_id,
+                                bk_market_url=bk_event.market_url,
+                                bk_team1_odds=bk_odds1,
+                                bk_team2_odds=bk_odds2,
+                                bk_implied_prob1=round(bk_prob1, 4),
+                                bk_implied_prob2=round(bk_prob2, 4),
+                                poly_event_id=poly_event.event_id,
+                                poly_market_url=poly_event.market_url,
+                                poly_team1_vwap=exact_vwap1,
+                                poly_team2_vwap=vwap2,
+                                poly_team1_top_price=top_poly_price1,
+                                poly_team2_top_price=top_poly_price2,
+                                poly_implied_prob1=round(exact_vwap1, 4),
+                                poly_implied_prob2=round(vwap2, 4),
+                                poly_outcome_selected=poly_event.team1,
+                                poly_stake=round(poly_stake, 2),
+                                bk_stake=round(bk_stake, 2),
+                                total_stake=round(self.typical_stake_usd, 2),
+                                sum_implied_prob=round(sum_cost_exact, 4),
+                                profit_pct=round(final_profit_pct, 2),
+                                net_profit_usd=round(net_profit_usd, 2),
+                                leg1_profit_usd=round(leg1_profit, 2),
+                                leg2_profit_usd=round(leg2_profit, 2),
+                                max_executable_stake_usd=max_exec_usd,
+                                slippage_pct=self.max_slippage_pct,
+                                price_change_delta_pct=max_delta,
+                                poly_timestamp=poly_event.timestamp,
+                                bk_timestamp=bk_event.timestamp,
+                                data_freshness_sec=round(data_freshness, 1),
+                                detected_at=now,
+                                ttl_sec=self.signal_ttl_sec if signal_type == SignalType.DYNAMIC else 120,
+                                status="new"
+                            ))
+
+            # Option B: Buy Team 2 on Polymarket, Bet Team 1 on BK
+            cost_poly2 = vwap2 / self.fee_factor
+            cost_bk1 = bk_prob1
+            sum_cost_b = cost_poly2 + cost_bk1
+
+            if sum_cost_b < 1.0:
+                profit_pct_b = ((1.0 / sum_cost_b) - 1.0) * 100.0
+                if profit_pct_b >= self.min_profit_pct:
+                    poly_stake = self.typical_stake_usd * (cost_poly2 / sum_cost_b)
+                    bk_stake = self.typical_stake_usd * (cost_bk1 / sum_cost_b)
+
+                    exact_vwap2 = calculate_buy_vwap(ob2.asks, poly_stake)
+                    if exact_vwap2 is not None:
+                        cost_poly2_exact = exact_vwap2 / self.fee_factor
+                        sum_cost_exact = cost_poly2_exact + cost_bk1
+                        final_profit_pct = ((1.0 / sum_cost_exact) - 1.0) * 100.0
+
+                        if final_profit_pct >= self.min_profit_pct:
+                            target_payout = self.typical_stake_usd / sum_cost_exact
+                            net_profit_usd = target_payout - self.typical_stake_usd
+
+                            leg1_profit = (bk_stake * bk_odds1) - (poly_stake + bk_stake)
+                            leg2_profit = (poly_stake * (1.0 / exact_vwap2) * self.fee_factor) - (poly_stake + bk_stake)
+
+                            max_exec_usd, _ = calculate_max_executable_liquidity(ob2.asks, self.max_slippage_pct)
+
+                            data_freshness = max(
+                                now - poly_event.timestamp,
+                                now - bk_event.timestamp,
+                                now - ob2.timestamp
+                            )
+
+                            opportunities.append(ArbitrageOpportunity(
+                                signal_id=str(uuid.uuid4()),
+                                signal_type=signal_type,
+                                event_title=f"{poly_event.team1} vs {poly_event.team2}",
+                                game=poly_event.game,
+                                tournament=poly_event.tournament,
+                                team1=poly_event.team1,
+                                team2=poly_event.team2,
+                                start_time=poly_event.start_time,
+                                bk_platform=bk_event.platform,
+                                bk_event_id=bk_event.event_id,
+                                bk_market_url=bk_event.market_url,
+                                bk_team1_odds=bk_odds1,
+                                bk_team2_odds=bk_odds2,
+                                bk_implied_prob1=round(bk_prob1, 4),
+                                bk_implied_prob2=round(bk_prob2, 4),
+                                poly_event_id=poly_event.event_id,
+                                poly_market_url=poly_event.market_url,
+                                poly_team1_vwap=vwap1,
+                                poly_team2_vwap=exact_vwap2,
+                                poly_team1_top_price=top_poly_price1,
+                                poly_team2_top_price=top_poly_price2,
+                                poly_implied_prob1=round(vwap1, 4),
+                                poly_implied_prob2=round(exact_vwap2, 4),
+                                poly_outcome_selected=poly_event.team2,
+                                poly_stake=round(poly_stake, 2),
+                                bk_stake=round(bk_stake, 2),
+                                total_stake=round(self.typical_stake_usd, 2),
+                                sum_implied_prob=round(sum_cost_exact, 4),
+                                profit_pct=round(final_profit_pct, 2),
+                                net_profit_usd=round(net_profit_usd, 2),
+                                leg1_profit_usd=round(leg1_profit, 2),
+                                leg2_profit_usd=round(leg2_profit, 2),
+                                max_executable_stake_usd=max_exec_usd,
+                                slippage_pct=self.max_slippage_pct,
+                                price_change_delta_pct=max_delta,
+                                poly_timestamp=poly_event.timestamp,
+                                bk_timestamp=bk_event.timestamp,
+                                data_freshness_sec=round(data_freshness, 1),
+                                detected_at=now,
+                                ttl_sec=self.signal_ttl_sec if signal_type == SignalType.DYNAMIC else 120,
+                                status="new"
+                            ))
+        else:
+            # 3-Way Sports (Soccer / Football with Draw)
+            # Find Draw odds on BK and Draw token on Poly
+            poly_draw_token = None
+            poly_draw_price = None
+            ob_draw = None
+            for i, o in enumerate(poly_event.outcomes):
+                if o.name.lower() in ["draw", "tie"] and i < len(poly_event.clob_token_ids):
+                    poly_draw_token = poly_event.clob_token_ids[i]
+                    ob_draw = poly_orderbooks.get(poly_draw_token)
+                    if ob_draw and ob_draw.best_ask is not None:
+                        poly_draw_price = ob_draw.best_ask
+                    else:
+                        poly_draw_price = o.price
+                    break
+
+            bk_draw_odds = None
+            for o in bk_event.outcomes:
+                if o.name.lower() in ["draw", "tie"]:
+                    bk_draw_odds = o.price
+                    break
+            bk_draw_prob = (1.0 / bk_draw_odds) if bk_draw_odds and bk_draw_odds > 1.0 else None
+
+            # 3-Way Combination 1: Poly(T1) + Poly(Draw) + BK(T2)
+            if poly_draw_price is not None and ob_draw and ob_draw.asks:
+                vwap_draw = calculate_buy_vwap(ob_draw.asks, self.typical_stake_usd / 3.0) or poly_draw_price
+                cost_p1 = vwap1 / self.fee_factor
+                cost_pdraw = vwap_draw / self.fee_factor
+                sum_cost_3a = cost_p1 + cost_pdraw + bk_prob2
+                if sum_cost_3a < 1.0:
+                    profit_pct_3a = ((1.0 / sum_cost_3a) - 1.0) * 100.0
+                    if profit_pct_3a >= self.min_profit_pct:
+                        target_payout = self.typical_stake_usd / sum_cost_3a
                         net_profit_usd = target_payout - self.typical_stake_usd
-
-                        # Per-leg profit verification
-                        leg1_profit = (poly_stake * (1.0 / exact_vwap1) * self.fee_factor) - (poly_stake + bk_stake)
-                        leg2_profit = (bk_stake * bk_odds2) - (poly_stake + bk_stake)
-
-                        # Liquidity check
+                        s_p1 = self.typical_stake_usd * (cost_p1 / sum_cost_3a)
+                        s_pdraw = self.typical_stake_usd * (cost_pdraw / sum_cost_3a)
+                        s_bk2 = self.typical_stake_usd * (bk_prob2 / sum_cost_3a)
                         max_exec_usd, _ = calculate_max_executable_liquidity(ob1.asks, self.max_slippage_pct)
-
-                        data_freshness = max(
-                            now - poly_event.timestamp,
-                            now - bk_event.timestamp,
-                            now - ob1.timestamp
-                        )
-
                         opportunities.append(ArbitrageOpportunity(
                             signal_id=str(uuid.uuid4()),
                             signal_type=signal_type,
-                            event_title=f"{poly_event.team1} vs {poly_event.team2}",
-                            game=poly_event.game,
-                            tournament=poly_event.tournament,
-                            team1=poly_event.team1,
-                            team2=poly_event.team2,
-                            start_time=poly_event.start_time,
-                            bk_platform=bk_event.platform,
-                            bk_event_id=bk_event.event_id,
-                            bk_market_url=bk_event.market_url,
-                            bk_team1_odds=bk_odds1,
-                            bk_team2_odds=bk_odds2,
-                            bk_implied_prob1=round(bk_prob1, 4),
-                            bk_implied_prob2=round(bk_prob2, 4),
-                            poly_event_id=poly_event.event_id,
-                            poly_market_url=poly_event.market_url,
-                            poly_team1_vwap=exact_vwap1,
-                            poly_team2_vwap=vwap2,
-                            poly_team1_top_price=top_poly_price1,
-                            poly_team2_top_price=top_poly_price2,
-                            poly_implied_prob1=round(exact_vwap1, 4),
-                            poly_implied_prob2=round(vwap2, 4),
-                            poly_outcome_selected=poly_event.team1,
-                            poly_stake=round(poly_stake, 2),
-                            bk_stake=round(bk_stake, 2),
-                            total_stake=round(self.typical_stake_usd, 2),
-                            sum_implied_prob=round(sum_cost_exact, 4),
-                            profit_pct=round(final_profit_pct, 2),
-                            net_profit_usd=round(net_profit_usd, 2),
-                            leg1_profit_usd=round(leg1_profit, 2),
-                            leg2_profit_usd=round(leg2_profit, 2),
-                            max_executable_stake_usd=max_exec_usd,
-                            slippage_pct=self.max_slippage_pct,
-                            price_change_delta_pct=max_delta,
-                            poly_timestamp=poly_event.timestamp,
-                            bk_timestamp=bk_event.timestamp,
-                            data_freshness_sec=round(data_freshness, 1),
-                            detected_at=now,
-                            ttl_sec=self.signal_ttl_sec if signal_type == SignalType.DYNAMIC else 120,
-                            status="new"
-                        ))
-
-        # Option B: Buy Team 2 on Polymarket, Bet Team 1 on BK
-        cost_poly2 = vwap2 / self.fee_factor
-        cost_bk1 = bk_prob1
-        sum_cost_b = cost_poly2 + cost_bk1
-
-        if sum_cost_b < 1.0:
-            profit_pct_b = ((1.0 / sum_cost_b) - 1.0) * 100.0
-            if profit_pct_b >= self.min_profit_pct:
-                poly_stake = self.typical_stake_usd * (cost_poly2 / sum_cost_b)
-                bk_stake = self.typical_stake_usd * (cost_bk1 / sum_cost_b)
-
-                exact_vwap2 = calculate_buy_vwap(ob2.asks, poly_stake)
-                if exact_vwap2 is not None:
-                    cost_poly2_exact = exact_vwap2 / self.fee_factor
-                    sum_cost_exact = cost_poly2_exact + cost_bk1
-                    final_profit_pct = ((1.0 / sum_cost_exact) - 1.0) * 100.0
-
-                    if final_profit_pct >= self.min_profit_pct:
-                        target_payout = self.typical_stake_usd / sum_cost_exact
-                        net_profit_usd = target_payout - self.typical_stake_usd
-
-                        leg1_profit = (bk_stake * bk_odds1) - (poly_stake + bk_stake)
-                        leg2_profit = (poly_stake * (1.0 / exact_vwap2) * self.fee_factor) - (poly_stake + bk_stake)
-
-                        max_exec_usd, _ = calculate_max_executable_liquidity(ob2.asks, self.max_slippage_pct)
-
-                        data_freshness = max(
-                            now - poly_event.timestamp,
-                            now - bk_event.timestamp,
-                            now - ob2.timestamp
-                        )
-
-                        opportunities.append(ArbitrageOpportunity(
-                            signal_id=str(uuid.uuid4()),
-                            signal_type=signal_type,
-                            event_title=f"{poly_event.team1} vs {poly_event.team2}",
+                            event_title=f"{poly_event.team1} vs {poly_event.team2} (3-Way)",
                             game=poly_event.game,
                             tournament=poly_event.tournament,
                             team1=poly_event.team1,
@@ -307,26 +397,26 @@ class DesyncDetector:
                             poly_event_id=poly_event.event_id,
                             poly_market_url=poly_event.market_url,
                             poly_team1_vwap=vwap1,
-                            poly_team2_vwap=exact_vwap2,
+                            poly_team2_vwap=vwap2,
                             poly_team1_top_price=top_poly_price1,
                             poly_team2_top_price=top_poly_price2,
                             poly_implied_prob1=round(vwap1, 4),
-                            poly_implied_prob2=round(exact_vwap2, 4),
-                            poly_outcome_selected=poly_event.team2,
-                            poly_stake=round(poly_stake, 2),
-                            bk_stake=round(bk_stake, 2),
+                            poly_implied_prob2=round(vwap2, 4),
+                            poly_outcome_selected=f"{poly_event.team1} + Draw",
+                            poly_stake=round(s_p1 + s_pdraw, 2),
+                            bk_stake=round(s_bk2, 2),
                             total_stake=round(self.typical_stake_usd, 2),
-                            sum_implied_prob=round(sum_cost_exact, 4),
-                            profit_pct=round(final_profit_pct, 2),
+                            sum_implied_prob=round(sum_cost_3a, 4),
+                            profit_pct=round(profit_pct_3a, 2),
                             net_profit_usd=round(net_profit_usd, 2),
-                            leg1_profit_usd=round(leg1_profit, 2),
-                            leg2_profit_usd=round(leg2_profit, 2),
+                            leg1_profit_usd=round(net_profit_usd, 2),
+                            leg2_profit_usd=round(net_profit_usd, 2),
                             max_executable_stake_usd=max_exec_usd,
                             slippage_pct=self.max_slippage_pct,
                             price_change_delta_pct=max_delta,
                             poly_timestamp=poly_event.timestamp,
                             bk_timestamp=bk_event.timestamp,
-                            data_freshness_sec=round(data_freshness, 1),
+                            data_freshness_sec=round(max(now - poly_event.timestamp, now - bk_event.timestamp), 1),
                             detected_at=now,
                             ttl_sec=self.signal_ttl_sec if signal_type == SignalType.DYNAMIC else 120,
                             status="new"

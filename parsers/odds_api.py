@@ -3,11 +3,14 @@ import logging
 import time
 from typing import List, Dict, Optional, Callable, Awaitable, Set
 from datetime import datetime
+import urllib.parse
 import aiohttp
+import socket
 
 import config
 from data_models import StandardizedEvent, Outcome
 from parsers.bookmaker_base import BaseBookmakerParser
+from matcher.normalization import normalize_string
 
 logger = logging.getLogger(__name__)
 
@@ -48,83 +51,136 @@ class OddsApiParser(BaseBookmakerParser):
 
         close_session = False
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            conn = aiohttp.TCPConnector(family=socket.AF_INET)
+            self._session = aiohttp.ClientSession(connector=conn)
             close_session = True
 
         result: List[StandardizedEvent] = []
-        try:
-            url = f"{self.base_url}/csgo_events/odds"
-            params = {
-                "apiKey": self.api_key,
-                "regions": "eu",
-                "markets": "h2h",
-                "oddsFormat": "decimal"
-            }
-            async with self._session.get(url, params=params, timeout=10) as resp:
-                if resp.status != 200:
-                    logger.warning(f"OddsAPI returned status {resp.status}")
-                    return result
+        sports_to_query = getattr(config, "ODDS_API_SPORTS", ["soccer_epl", "mma_mixed_martial_arts"])
+        now = time.time()
 
-                data = await resp.json()
-                now = time.time()
-
-                for item in data:
-                    match_id = item.get("id")
-                    team1 = item.get("home_team", "")
-                    team2 = item.get("away_team", "")
-                    sport_key = item.get("sport_title", "CS2")
-                    commence_time_str = item.get("commence_time")
-
-                    start_time = None
-                    if commence_time_str:
-                        try:
-                            start_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
-                        except Exception:
-                            pass
-
-                    bookmakers = item.get("bookmakers", [])
-                    if not bookmakers:
+        for sport_key in sports_to_query:
+            try:
+                url = f"{self.base_url}/{sport_key}/odds"
+                params = {
+                    "apiKey": self.api_key,
+                    "regions": "eu",
+                    "markets": "h2h",
+                    "oddsFormat": "decimal"
+                }
+                async with self._session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"OddsAPI for {sport_key} returned status {resp.status}")
                         continue
 
-                    # Grab Pinnacle or first bookmaker
-                    bm = next((b for b in bookmakers if b.get("key") == "pinnacle"), bookmakers[0])
-                    bm_title = bm.get("title", self.source_name)
+                    data = await resp.json()
+                    for item in data:
+                        match_id = item.get("id")
+                        team1 = item.get("home_team", "")
+                        team2 = item.get("away_team", "")
+                        sport_title = item.get("sport_title", sport_key)
+                        commence_time_str = item.get("commence_time")
 
-                    h2h_market = next((m for m in bm.get("markets", []) if m.get("key") == "h2h"), None)
-                    if not h2h_market or len(h2h_market.get("outcomes", [])) < 2:
-                        continue
+                        # Classify game and tournament
+                        if "soccer" in sport_key:
+                            game = "Soccer"
+                            tournament = sport_title
+                        elif "mma" in sport_key:
+                            game = "MMA"
+                            tournament = sport_title
+                        elif "tennis" in sport_key:
+                            game = "Tennis"
+                            tournament = sport_title
+                        else:
+                            game = sport_title
+                            tournament = "Tournament"
 
-                    outs = h2h_market["outcomes"]
-                    odds1 = float(outs[0].get("price", 1.0))
-                    odds2 = float(outs[1].get("price", 1.0))
+                        start_time = None
+                        if commence_time_str:
+                            try:
+                                start_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
+                            except Exception:
+                                pass
 
-                    ev = StandardizedEvent(
-                        event_id=f"oddsapi_{match_id}",
-                        platform=bm_title,
-                        game=sport_key,
-                        tournament="Esports Match",
-                        team1=team1,
-                        team2=team2,
-                        start_time=start_time,
-                        outcomes=[
+                        bookmakers = item.get("bookmakers", [])
+                        if not bookmakers:
+                            continue
+
+                        # Grab Pinnacle or first bookmaker
+                        bm = next((b for b in bookmakers if b.get("key") == "pinnacle"), bookmakers[0])
+                        bm_title = bm.get("title", self.source_name)
+
+                        h2h_market = next((m for m in bm.get("markets", []) if m.get("key") == "h2h"), None)
+                        if not h2h_market or len(h2h_market.get("outcomes", [])) < 2:
+                            continue
+
+                        outs = h2h_market.get("outcomes", [])
+                        norm_t1 = normalize_string(team1)
+                        norm_t2 = normalize_string(team2)
+
+                        odds1 = None
+                        odds2 = None
+                        odds_draw = None
+
+                        for o in outs:
+                            o_name = o.get("name", "")
+                            o_norm = normalize_string(o_name)
+                            p = float(o.get("price", 1.0))
+                            if o_norm == norm_t1 or o_name.lower() == team1.lower():
+                                odds1 = p
+                            elif o_norm == norm_t2 or o_name.lower() == team2.lower():
+                                odds2 = p
+                            elif o_norm in ["draw", "tie"] or o_name.lower() == "draw":
+                                odds_draw = p
+
+                        if odds1 is None or odds2 is None:
+                            continue
+
+                        # Construct direct link to the bookmaker match
+                        search_q = urllib.parse.quote(f"{team1} vs {team2}")
+                        bm_key = bm.get("key", "").lower()
+                        if "pinnacle" in bm_key:
+                            market_url = f"https://www.pinnacle.com/en/search?q={search_q}"
+                        elif "betfair" in bm_key:
+                            market_url = f"https://www.betfair.com/sport/search?q={search_q}"
+                        elif "1xbet" in bm_key:
+                            market_url = f"https://1xbet.com/en/line?q={search_q}"
+                        else:
+                            market_url = f"https://www.google.com/search?q={urllib.parse.quote(f'{team1} vs {team2} {bm_title} odds')}"
+
+                        outcomes_list = [
                             Outcome(name=team1, price=odds1),
                             Outcome(name=team2, price=odds2)
-                        ],
-                        timestamp=now
-                    )
-                    self.events[ev.event_id] = ev
-                    result.append(ev)
+                        ]
+                        if odds_draw is not None:
+                            outcomes_list.append(Outcome(name="Draw", price=odds_draw))
 
-        except Exception as e:
-            logger.error(f"Error fetching OddsAPI events: {e}")
-        finally:
-            if close_session and self._session:
-                await self._session.close()
-                self._session = None
+                        ev = StandardizedEvent(
+                            event_id=f"oddsapi_{match_id}",
+                            platform=bm_title,
+                            game=game,
+                            tournament=tournament,
+                            team1=team1,
+                            team2=team2,
+                            start_time=start_time,
+                            outcomes=outcomes_list,
+                            timestamp=now,
+                            market_url=market_url
+                        )
+                        self.events[ev.event_id] = ev
+                        result.append(ev)
+
+            except Exception as e:
+                logger.error(f"Error fetching OddsAPI events for {sport_key}: {e}")
+
+        if close_session and self._session:
+            await self._session.close()
+            self._session = None
 
         return result
 
     async def _polling_loop(self):
+        poll_interval = getattr(config, "ODDS_API_POLL_INTERVAL_SEC", 60)
         while self._running:
             try:
                 events = await self.fetch_events()
@@ -133,7 +189,7 @@ class OddsApiParser(BaseBookmakerParser):
                         await cb(ev)
             except Exception as e:
                 logger.error(f"Error in OddsAPI polling loop: {e}")
-            await asyncio.sleep(config.BOOKMAKER_POLL_INTERVAL_SEC)
+            await asyncio.sleep(poll_interval)
 
     async def start(self):
         self._running = True

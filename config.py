@@ -19,6 +19,13 @@ POLYMARKET_CLOB_WS_URL = os.getenv("POLYMARKET_CLOB_WS_URL", "wss://ws-subscript
 # Odds API / Bookmaker Endpoints
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
 ODDS_API_URL = os.getenv("ODDS_API_URL", "https://api.the-odds-api.com/v4/sports")
+ODDS_API_SPORTS = [
+    "soccer_epl",
+    "soccer_uefa_champs_league",
+    "soccer_spain_la_liga",
+    "soccer_germany_bundesliga",
+    "mma_mixed_martial_arts"
+]
 
 # Trading & Risk Parameters
 TYPICAL_STAKE_USD = float(os.getenv("TYPICAL_STAKE_USD", "1000.0"))
@@ -45,11 +52,17 @@ FUZZY_MATCH_THRESHOLD = float(os.getenv("FUZZY_MATCH_THRESHOLD", "80.0"))
 MATCH_TIME_WINDOW_MINUTES = int(os.getenv("MATCH_TIME_WINDOW_MINUTES", "30"))
 
 # Target Esports & Tournaments (Top liquidity focus)
+TRACK_ALL_TOURNAMENTS = os.getenv("TRACK_ALL_TOURNAMENTS", "true").lower() in ("true", "1", "yes")
 TRACKED_ESPORTS = {
-    "CS2": ["IEM", "BLAST", "Major", "ESL Pro League", "PGL"],
+    "CS2": ["IEM", "BLAST", "Major", "ESL Pro League", "PGL", "StarLadder"],
     "Dota 2": ["The International", "BLAST Slam", "Riyadh Masters", "DreamLeague", "ESL One"],
-    "LoL": ["LPL", "LCK", "Worlds", "MSI"]
+    "LoL": ["LPL", "LCK", "Worlds", "MSI", "LEC"]
 }
+
+# Web Dashboard Server Configuration
+WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
+WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
+WEB_ENABLED = os.getenv("WEB_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # Manual Matched Pairs Override (BK Event ID -> Polymarket Event ID)
 MANUAL_MATCHED_PAIRS: Dict[str, str] = {

@@ -4,17 +4,24 @@ import unicodedata
 # Common esports team alias mappings
 TEAM_ALIASES = {
     "natus vincere": "navi",
+    "navi": "navi",
+    "navi junior": "navi junior",
     "faze clan": "faze",
+    "faze": "faze",
     "g2 esports": "g2",
+    "g2": "g2",
     "team spirit": "spirit",
+    "spirit": "spirit",
     "virtus.pro": "vp",
     "virtus pro": "vp",
     "team liquid": "liquid",
+    "liquid": "liquid",
     "astralis": "astralis",
     "mousesports": "mouz",
     "mouz": "mouz",
     "cloud9": "c9",
     "ninjas in pyjamas": "nip",
+    "nip": "nip",
     "fnatic": "fnatic",
     "og": "og",
     "team secret": "secret",
@@ -24,6 +31,24 @@ TEAM_ALIASES = {
     "gen g": "geng",
     "edward gaming": "edg",
     "royale never give up": "rng",
+    "team vitality": "vitality",
+    "vitality": "vitality",
+    "furia esports": "furia",
+    "furia": "furia",
+    "aurora gaming": "aurora",
+    "aurora": "aurora",
+    "team we": "we",
+    "we": "we",
+    "jd gaming": "jdg",
+    "jdg": "jdg",
+    "movistar koi": "koi",
+    "koi": "koi",
+    "betboom team": "betboom",
+    "betboom": "betboom",
+    "complexity gaming": "col",
+    "complexity": "col",
+    "heroic": "heroic",
+    "mibr": "mibr",
 }
 
 CYRILLIC_TO_LATIN = {
@@ -53,7 +78,7 @@ def normalize_string(text: str) -> str:
         if unicodedata.category(c) != 'Mn'
     )
     # Strip common prefix/suffix noise
-    text = re.sub(r'\b(esports|gaming|team|club)\b', '', text)
+    text = re.sub(r'\b(esports|gaming|team|club|fc|cf|afc)\b', '', text)
     # Remove non-alphanumeric chars
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
     # Normalize multiple spaces

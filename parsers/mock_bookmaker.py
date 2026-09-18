@@ -65,8 +65,42 @@ class MockBookmakerParser(BaseBookmakerParser):
             market_url="https://pinnacle.com/esports/cs2/spirit-vs-g2"
         )
 
+        sample3 = StandardizedEvent(
+            event_id="bk_mouz_navi_1",
+            platform=self._platform_name,
+            game="CS2",
+            tournament="StarLadder",
+            team1="MOUZ",
+            team2="Natus Vincere",
+            start_time=start_time,
+            outcomes=[
+                Outcome(name="MOUZ", price=2.15),
+                Outcome(name="Natus Vincere", price=1.72)
+            ],
+            timestamp=now,
+            market_url="https://pinnacle.com/esports/cs2/mouz-vs-navi"
+        )
+
+        sample4 = StandardizedEvent(
+            event_id="bk_vitality_furia_1",
+            platform=self._platform_name,
+            game="CS2",
+            tournament="StarLadder",
+            team1="Vitality",
+            team2="FURIA",
+            start_time=start_time,
+            outcomes=[
+                Outcome(name="Vitality", price=1.40),
+                Outcome(name="FURIA", price=2.90)
+            ],
+            timestamp=now,
+            market_url="https://pinnacle.com/esports/cs2/vitality-vs-furia"
+        )
+
         self.events[sample1.event_id] = sample1
         self.events[sample2.event_id] = sample2
+        self.events[sample3.event_id] = sample3
+        self.events[sample4.event_id] = sample4
 
     def subscribe(self, match_id: str):
         self.subscribed_matches.add(match_id)
